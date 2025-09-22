@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Demo Exchange - Indodax Like (Dummy)</title>
+<style>
+  :root{
+    --bg:#0b1320; --card:#0f2130; --muted:#99a1ad; --accent:#00c2a8; --danger:#ff6b6b; --glass: rgba(255,255,255,0.04);
+    --green:#2ecc71; --red:#ff6b6b;
+  }
+  body{margin:0;font-family:Inter, system-ui, Arial;background:linear-gradient(180deg,#051021 0%,#081226 100%); color:#e6eef6}
+  .app{display:grid;grid-template-columns:1fr 560px 360px;grid-gap:18px;padding:18px;height:100vh;box-sizing:border-box}
+  .card{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,0.6);overflow:auto}
+  header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:12px 18px}
+  h1{font-size:18px;margin:0}
+  .pair{font-weight:700;color:var(--accent)}
+  /* left column */
+  .left{display:flex;flex-direction:column;gap:12px}
+  .orderbook{display:flex;gap:12px}
+  .book-side{flex:1}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px;text-align:right;color:#cfe6f3}
+  th{color:var(--muted);font-size:12px;text-align:center}
+  .bids td{color:var(--green)}
+  .asks td{color:var(--red)}
+  /* center */
+  .center{display:flex;flex-direction:column;gap:12px}
+  #chart{width:100%;height:260px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border-radius:8px}
+  .recent-trades{height:140px;overflow:auto}
+  .trade{display:flex;justify-content:space-between;padding:6px;border-bottom:1px dashed rgba(255,255,255,0.02);font-size:13px}
+  .trade.buy{color:var(--green)} .trade.sell{color:var(--red)}
+  /* right column */
+  .right{display:flex;flex-direction:column;gap:12px}
+  .form-row{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  input,select,button{padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:#e6eef6}
+  button.primary{background:var(--accent);border:none;color:#042029;font-weight:700}
+  .balances{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px}
+  .small{font-size:12px;color:var(--muted)}
+  .orders-list{max-height:240px;overflow:auto}
+  .order-item{display:flex;justify-content:space-between;padding:8px;border-radius:6px;background:var(--glass);margin-bottom:6px}
+  .footer{grid-column:1/-1;padding:12px;text-align:center;color:var(--muted);font-size:13px}
+  /* responsive */
+  @media(max-width:1100px){.app{grid-template-columns:1fr;grid-auto-rows:auto}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Demo Exchange — <span class="pair" id="pair-label">BTC/IDR</span></h1>
+    <div class="small">Mode: Demo (data palsu, engine lokal)</div>
+  </div>
+  <div>
+    <span class="small">User:</span> <strong id="user-id">demo_user</strong>
+  </div>
+</header>
+
+<div class="app">
+  <div class="card left">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><strong>Orderbook</strong> <span class="small">Depth 10</span></div>
+      <div class="small">Mid: <strong id="mid-price">-</strong></div>
+    </div>
+    <div class="orderbook" style="margin-top:8px">
+      <div class="book-side card" style="padding:8px">
+        <div style="font-size:13px;margin-bottom:8px;color:var(--muted)"><strong>Bids</strong></div>
+        <table id="bids-table"><thead><tr><th>Price</th><th>Amount</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="book-side card" style="padding:8px">
+        <div style="font-size:13px;margin-bottom:8px;color:var(--muted)"><strong>Asks</strong></div>
+        <table id="asks-table"><thead><tr><th>Price</th><th>Amount</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <strong>Market Depth Chart (simple)</strong>
+      <canvas id="depth-canvas" height="120" style="width:100%;border-radius:6px;margin-top:6px;background:linear-gradient(180deg, rgba(255,255,255,0.01), transparent)"></canvas>
+    </div>
+  </div>
+
+  <div class="card center">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div><strong>Chart Harga</strong></div>
+      <div class="small">Last: <strong id="last-price">-</strong></div>
+    </div>
+    <canvas id="chart"></canvas>
+
+    <div style="margin-top:10px;display:flex;justify-content:space-between;gap:12px">
+      <div style="flex:1">
+        <strong>Recent Trades</strong>
+        <div class="recent-trades" id="recent-trades"></div>
+      </div>
+      <div style="width:220px">
+        <strong>Trade Stats</strong>
+        <div class="small">24h Vol (demo): <span id="vol-24">-</span></div>
+        <div class="small">24h High: <span id="high-24">-</span></div>
+        <div class="small">24h Low: <span id="low-24">-</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card right">
+    <div>
+      <strong>Wallet & Orders</strong>
+      <div class="balances" style="margin-top:8px">
+        <div style="background:var(--glass);padding:8px;border-radius:8px">
+          <div class="small">IDR Balance</div>
+          <div style="font-weight:700" id="bal-idr">Rp 100.000.000</div>
+        </div>
+        <div style="background:var(--glass);padding:8px;border-radius:8px">
+          <div class="small">BTC Balance</div>
+          <div style="font-weight:700" id="bal-btc">0.500</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <strong>Pasang Order</strong>
+      <div style="margin-top:8px">
+        <div class="form-row"><label style="width:70px">Side</label>
+          <select id="side-select"><option value="buy">Buy</option><option value="sell">Sell</option></select></div>
+
+        <div class="form-row"><label style="width:70px">Type</label>
+          <select id="type-select"><option value="limit">Limit</option><option value="market">Market</option></select></div>
+
+        <div class="form-row"><label style="width:70px">Price</label>
+          <input id="price-input" placeholder="Rp" /></div>
+
+        <div class="form-row"><label style="width:70px">Amount</label>
+          <input id="amount-input" placeholder="BTC" value="0.001"/></div>
+
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="primary" id="place-btn">Place Order</button>
+          <button id="cancel-all-btn">Cancel All</button>
+        </div>
+        <div class="small" style="margin-top:8px">Fee: <span id="fee-info">0.2%</span></div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px">
+      <strong>My Orders</strong>
+      <div class="orders-list" id="orders-list"></div>
+    </div>
+
+    <div style="margin-top:12px">
+      <strong>Trade History (Mine)</strong>
+      <div id="my-trades" style="max-height:140px;overflow:auto;margin-top:6px"></div>
+    </div>
+  </div>
+
+  <div class="footer card" style="margin-top:6px">
+    Demo engine lokal • Tidak terhubung ke jaringan nyata • Simulasi orderbook + matching engine sederhana
+  </div>
+</div>
+
+<script>
+/* ----------------------------
+   Demo Exchange Logic (all in-browser)
+   Features:
+   - Synthetic orderbook (depth) around mid price
+   - Matching engine: limit/market orders, partial fills, trade history
+   - Wallet (IDR & BTC) demo, fees
+   - Price time series + simple chart (canvas)
+   ---------------------------- */
+
+const USER = {id: 'demo_user'};
+document.getElementById('user-id').innerText = USER.id;
+
+// Config
+const PAIR = {base: 'BTC', quote: 'IDR', symbol: 'BTC/IDR'};
+const FEE_RATE = 0.002; // 0.2%
+const INITIAL = {mid: 450000000, // Rp 450,000,000 per BTC
+                 btc: 0.5,
+                 idr: 100_000_000};
+
+// State
+let state = {
+  mid: INITIAL.mid,
+  bids: [], // [{price, amount}]
+  asks: [],
+  orderIdSeq: 1,
+  orders: [], // open orders {id,user,side,type,price,amount,filled,status,ts}
+  trades: [], // {id,buyOrderId,sellOrderId,price,amount,ts}
+  myTrades: [],
+  priceSeries: [], // [{ts,price}]
+  balances: {BTC: INITIAL.btc, IDR: INITIAL.idr},
+};
+
+// Utilities
+const fmtIDR = n => 'Rp ' + Number(n).toLocaleString('id-ID', {maximumFractionDigits:0});
+const fmtBTC = n => Number(n).toFixed(6);
+const now = () => new Date().toISOString();
+
+function seedOrderbook(depth=12, spreadPct=0.0025) {
+  // create symmetrical bids & asks around mid
+  state.bids = []; state.asks = [];
+  const mid = state.mid;
+  for (let i = depth; i >= 1; i--) {
+    const p = Math.round(mid * (1 - spreadPct * i));
+    const amt = Number((Math.random()*0.05 + 0.001*(i/2)).toFixed(6));
+    state.bids.push({price: p, amount: amt});
+  }
+  for (let i = 1; i <= depth; i++) {
+    const p = Math.round(mid * (1 + spreadPct * i));
+    const amt = Number((Math.random()*0.05 + 0.001*(i/2)).toFixed(6));
+    state.asks.push({price: p, amount: amt});
+  }
+  updateOrderbookUI();
+}
+
+function updateOrderbookUI() {
+  document.getElementById('mid-price').innerText = fmtIDR(state.mid);
+  document.getElementById('last-price').innerText = fmtIDR(state.priceSeries.length? state.priceSeries[state.priceSeries.length-1].price : state.mid);
+
+  const bidsTbody = document.querySelector('#bids-table tbody');
+  const asksTbody = document.querySelector('#asks-table tbody');
+  bidsTbody.innerHTML = ''; asksTbody.innerHTML = '';
+  state.bids.slice().reverse().forEach(b => {
+    const tr = document.createElement('tr'); tr.classList.add('bids');
+    tr.innerHTML = `<td>${fmtIDR(b.price)}</td><td>${fmtBTC(b.amount)}</td>`;
+    bidsTbody.appendChild(tr);
+  });
+  state.asks.forEach(a => {
+    const tr = document.createElement('tr'); tr.classList.add('asks');
+    tr.innerHTML = `<td>${fmtIDR(a.price)}</td><td>${fmtBTC(a.amount)}</td>`;
+    asksTbody.appendChild(tr);
+  });
+
+  drawDepth();
+  renderOrders();
+  renderBalances();
+  renderRecentTrades();
+  renderMyTrades();
+  updateStats();
+}
+
+/* Depth chart: area of cumulative bids/asks */
+function drawDepth() {
+  const c = document.getElementById('depth-canvas');
+  const ctx = c.getContext('2d');
+  c.width = c.clientWidth; c.height = 120;
+  ctx.clearRect(0,0,c.width,c.height);
+  const bids = state.bids.slice().reverse();
+  const asks = state.asks.slice();
+  const cumBids = bids.map((b,i)=>b.amount*(i+1));
+  const cumAsks = asks.map((a,i)=>a.amount*(i+1));
+  // draw bids (left)
+  ctx.fillStyle = 'rgba(46, 204, 113, 0.15)';
+  let maxCum = Math.max(...cumBids.concat(cumAsks, [0.0001]));
+  const pad = 10;
+  bids.forEach((b,i)=>{
+    const x = pad + i*( (c.width/2 - pad)/bids.length );
+    const w = (c.width/2 - pad)/bids.length - 2;
+    const h = (cumBids[i]/maxCum) * (c.height - 20);
+    ctx.fillRect(x, c.height - h - 10, w, h);
+  });
+  // asks (right)
+  ctx.fillStyle = 'rgba(255, 107, 107, 0.12)';
+  asks.forEach((a,i)=>{
+    const x = c.width/2 + pad + i*( (c.width/2 - pad)/asks.length );
+    const w = (c.width/2 - pad)/asks.length - 2;
+    const h = (cumAsks[i]/maxCum) * (c.height - 20);
+    ctx.fillRect(x, c.height - h - 10, w, h);
+  });
+}
+
+/* Price chart: simple line chart */
+function drawPriceChart() {
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.clientWidth; canvas.height = 260;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  const series = state.priceSeries.slice(-80);
+  if (series.length < 2) {
+    // flat line
+    ctx.strokeStyle = '#60e0c3'; ctx.lineWidth = 2;
+    const y = canvas.height/2;
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(canvas.width,y); ctx.stroke();
+    return;
+  }
+
+  const prices = series.map(p=>p.price);
+  const maxP = Math.max(...prices); const minP = Math.min(...prices);
+  const pad = 20;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#60e0c3';
+  ctx.beginPath();
+  series.forEach((pt,i)=>{
+    const x = pad + i * ((canvas.width-2*pad) / (series.length-1));
+    const y = pad + (1 - (pt.price - minP)/(maxP-minP || 1))*(canvas.height-2*pad);
+    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // fill
+  ctx.lineTo(canvas.width-pad, canvas.height-pad);
+  ctx.lineTo(pad, canvas.height-pad);
+  ctx.fillStyle = 'rgba(96,224,195,0.06)';
+  ctx.fill();
+}
+
+/* Trades UI */
+function renderRecentTrades() {
+  const el = document.getElementById('recent-trades');
+  el.innerHTML = '';
+  const list = state.trades.slice().reverse().slice(0,80);
+  if (list.length===0) { el.innerHTML = '<div class="small">No trades yet</div>'; return; }
+  list.forEach(t=>{
+    const div = document.createElement('div'); div.className='trade ' + (t.side||'');
+    div.style.display='flex'; div.style.justifyContent='space-between';
+    div.innerHTML = `<div style="font-size:13px">${t.side==='buy' ? 'Buy' : 'Sell'} • ${fmtBTC(t.amount)} BTC</div><div style="text-align:right"><div style="font-weight:700">${fmtIDR(t.price)}</div><div class="small">${t.ts.slice(11,19)}</div></div>`;
+    el.appendChild(div);
+  });
+}
+
+/* My orders & balances */
+function renderOrders() {
+  const el = document.getElementById('orders-list');
+  el.innerHTML = '';
+  state.orders.forEach(o=>{
+    const d = document.createElement('div'); d.className='order-item';
+    d.innerHTML = `<div>
+      <div style="font-size:13px">${o.side.toUpperCase()} ${o.type.toUpperCase()}</div>
+      <div class="small">${o.ts.slice(11,19)} • ID ${o.id}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-weight:700">${o.type==='market' ? fmtBTC(o.amount) + ' BTC' : fmtIDR(o.price) + ' • ' + fmtBTC(o.amount) }</div>
+      <div class="small">Filled: ${fmtBTC(o.filled)}</div>
+      <div style="margin-top:6px"><button onclick="cancelOrder(${o.id})">Cancel</button></div>
+    </div>`;
+    el.appendChild(d);
+  });
+}
+
+function renderBalances() {
+  document.getElementById('bal-idr').innerText = fmtIDR(state.balances.IDR);
+  document.getElementById('bal-btc').innerText = fmtBTC(state.balances.BTC);
+}
+
+function renderMyTrades() {
+  const el = document.getElementById('my-trades');
+  el.innerHTML = '';
+  state.myTrades.slice().reverse().slice(0,50).forEach(t=>{
+    const d = document.createElement('div'); d.className='order-item';
+    d.style.marginBottom='6px';
+    d.innerHTML = `<div><div style="font-size:13px">${t.side.toUpperCase()} ${fmtBTC(t.amount)} BTC</div>
+      <div class="small">${fmtIDR(t.price)} • ${t.ts.slice(11,19)}</div></div>
+      <div style="text-align:right"><div class="small">Fee: ${fmtBTC(t.fee)} BTC</div></div>`;
+    el.appendChild(d);
+  });
+}
+
+/* Update trade stats */
+function updateStats() {
+  const series = state.priceSeries.slice(-1440);
+  if (!series.length) return;
+  const prices = series.map(s=>s.price);
+  const high = Math.max(...prices); const low = Math.min(...prices);
+  const vol = state.trades.reduce((s,t)=>s + (t.amount||0),0);
+  document.getElementById('high-24').innerText = fmtIDR(high);
+  document.getElementById('low-24').innerText = fmtIDR(low);
+  document.getElementById('vol-24').innerText = fmtBTC(vol);
+}
+
+/* Matching engine core:
+   - For market buy: consume asks from lowest price upward
+   - For market sell: consume bids from highest price downward
+   - For limit order: place into book (bids or asks) then try match if crossed
+   - Partial fills allowed
+*/
+function placeOrder({user, side, type, price, amount}) {
+  const id = state.orderIdSeq++;
+  const order = {id, user, side, type, price: price||0, amount, filled:0, status:'open', ts: now()};
+  state.orders.push(order);
+
+  if (type === 'market') {
+    executeMarketOrder(order);
+  } else {
+    // limit
+    if ((side==='buy' && price >= state.asks[0]?.price) || (side==='sell' && price <= state.bids[0]?.price)) {
+      // cross: attempt to match immediately
+      matchLimitOrder(order);
+    } else {
+      // add to book
+      addToBook(order);
+    }
+  }
+  updateOrderbookUI();
+}
+
+function executeMarketOrder(order) {
+  if (order.side === 'buy') {
+    // consume asks ascending
+    let remaining = order.amount;
+    while (remaining > 1e-9 && state.asks.length) {
+      const top = state.asks[0];
+      const tradeAmt = Math.min(remaining, top.amount);
+      const tradePrice = top.price;
+      // fees applied to taker: in BTC for buys? We'll deduct fee from received BTC
+      const fee = tradeAmt * FEE_RATE;
+      // funds check: buyer must have enough IDR
+      const cost = tradeAmt * tradePrice;
+      if (state.balances.IDR < cost) { // can't fully buy
+        // attempt partial by affordable amount
+        const affordable = Math.floor((state.balances.IDR / tradePrice) * 1e8)/1e8;
+        if (affordable <= 0) break;
+        // adjust tradeAmt
+      }
+      // execute
+      pushTrade({buyOrderId: order.id, sellOrderId: null, price: tradePrice, amount: tradeAmt, side:'buy', fee});
+      // update book
+      top.amount -= tradeAmt; if (top.amount <= 1e-9) state.asks.shift();
+      // balances: deduct IDR, add BTC minus fee
+      state.balances.IDR -= tradeAmt * tradePrice;
+      state.balances.BTC += (tradeAmt - fee);
+      order.filled += tradeAmt;
+      remaining -= tradeAmt;
+    }
+  } else {
+    // market sell: consume bids descending
+    let remaining = order.amount;
+    while (remaining > 1e-9 && state.bids.length) {
+      const top = state.bids[0];
+      const tradeAmt = Math.min(remaining, top.amount);
+      const tradePrice = top.price;
+      const fee = tradeAmt * FEE_RATE;
+      // execute
+      pushTrade({buyOrderId: null, sellOrderId: order.id, price: tradePrice, amount: tradeAmt, side:'sell', fee});
+      top.amount -= tradeAmt; if (top.amount <= 1e-9) state.bids.shift();
+      // balances: add IDR from sale, deduct BTC + fee
+      state.balances.IDR += tradeAmt * tradePrice;
+      state.balances.BTC -= (tradeAmt + fee);
+      order.filled += tradeAmt;
+      remaining -= tradeAmt;
+    }
+  }
+  order.status = order.filled >= order.amount - 1e-9 ? 'filled' : 'partially_filled';
+  // adjust mid/price series by last trade if any fill happened
+  if (order.filled > 0) updateMarketPriceAfterTrade();
+}
+
+function matchLimitOrder(order) {
+  // Try matching against opposite book until filled or book exhausted
+  if (order.side === 'buy') {
+    let remaining = order.amount;
+    // while there is ask at price <= order.price
+    while (remaining > 1e-9 && state.asks.length && state.asks[0].price <= order.price) {
+      const top = state.asks[0];
+      const tradeAmt = Math.min(remaining, top.amount);
+      const tradePrice = top.price;
+      const fee = tradeAmt * FEE_RATE;
+      pushTrade({buyOrderId: order.id, sellOrderId: null, price: tradePrice, amount: tradeAmt, side:'buy', fee});
+      top.amount -= tradeAmt; if (top.amount <= 1e-9) state.asks.shift();
+      state.balances.IDR -= tradeAmt * tradePrice;
+      state.balances.BTC += (tradeAmt - fee);
+      order.filled += tradeAmt;
+      remaining -= tradeAmt;
+    }
+    if (remaining > 1e-9) {
+      // add remaining to bids (book)
+      const rem = remaining;
+      addToBook({id: order.id, user: order.user, side: 'buy', type: 'limit', price: order.price, amount: rem, filled: order.filled, ts: order.ts});
+    } else {
+      order.status = 'filled';
+    }
+  } else {
+    let remaining = order.amount;
+    while (remaining > 1e-9 && state.bids.length && state.bids[0].price >= order.price) {
+      const top = state.bids[0];
+      const tradeAmt = Math.min(remaining, top.amount);
+      const tradePrice = top.price;
+      const fee = tradeAmt * FEE_RATE;
+      pushTrade({buyOrderId: null, sellOrderId: order.id, price: tradePrice, amount: tradeAmt, side:'sell', fee});
+      top.amount -= tradeAmt; if (top.amount <= 1e-9) state.bids.shift();
+      state.balances.IDR += tradeAmt * tradePrice;
+      state.balances.BTC -= (tradeAmt + fee);
+      order.filled += tradeAmt;
+      remaining -= tradeAmt;
+    }
+    if (remaining > 1e-9) {
+      addToBook({id: order.id, user: order.user, side: 'sell', type: 'limit', price: order.price, amount: remaining, filled: order.filled, ts: order.ts});
+    } else {
+      order.status = 'filled';
+    }
+  }
+  updateMarketPriceAfterTrade();
+}
+
+function addToBook(o) {
+  // insert into bids or asks maintaining price ordering
+  if (o.side==='buy') {
+    // bids descending
+    const pos = state.bids.findIndex(b=>b.price <= o.price);
+    if (pos === -1) state.bids.push({price:o.price, amount:o.amount});
+    else state.bids.splice(pos,0,{price:o.price, amount:o.amount});
+  } else {
+    // asks ascending
+    const pos = state.asks.findIndex(a=>a.price >= o.price);
+    if (pos === -1) state.asks.push({price:o.price, amount:o.amount});
+    else state.asks.splice(pos,0,{price:o.price, amount:o.amount});
+  }
+  // order remains open in state.orders (we keep master list)
+}
+
+function pushTrade({buyOrderId=null, sellOrderId=null, price, amount, side, fee=0}) {
+  const id = state.trades.length + 1;
+  const trade = {id, buyOrderId, sellOrderId, price, amount, ts: now(), side, fee};
+  state.trades.push(trade);
+  // price series
+  state.priceSeries.push({ts: now(), price});
+  // if trade was caused by user's order, push into myTrades
+  if (buyOrderId && state.orders.find(o=>o.id===buyOrderId && o.user===USER.id)) {
+    state.myTrades.push({...trade, side:'buy', fee: fee});
+  }
+  if (sellOrderId && state.orders.find(o=>o.id===sellOrderId && o.user===USER.id)) {
+    state.myTrades.push({...trade, side:'sell', fee: fee});
+  }
+  // update last price
+  document.getElementById('last-price').innerText = fmtIDR(price);
+  drawPriceChart();
+}
+
+/* Cancel order */
+function cancelOrder(id) {
+  // remove from state.orders and remove from book if present
+  const idx = state.orders.findIndex(o=>o.id===id);
+  if (idx===-1) return;
+  const o = state.orders[idx];
+  if (o.status==='filled') return;
+  // remove from book by price & amount (simple)
+  if (o.type==='limit') {
+    if (o.side==='buy') state.bids = state.bids.filter(b=>!(b.price===o.price && Math.abs(b.amount - o.amount) < 1e-9));
+    else state.asks = state.asks.filter(a=>!(a.price===o.price && Math.abs(a.amount - o.amount) < 1e-9));
+  }
+  state.orders.splice(idx,1);
+  updateOrderbookUI();
+}
+
+/* Cancel all */
+function cancelAll() {
+  state.orders = [];
+  seedOrderbook();
+  updateOrderbookUI();
+}
+
+/* When a trade occurs, adjust mid to last */
+function updateMarketPriceAfterTrade() {
+  if (state.trades.length===0) return;
+  const last = state.trades[state.trades.length-1];
+  state.mid = last.price;
+  updateOrderbookUI();
+}
+
+/* UI handlers */
+document.getElementById('place-btn').addEventListener('click', ()=>{
+  const side = document.getElementById('side-select').value;
+  const type = document.getElementById('type-select').value;
+  const priceVal = Number(document.getElementById('price-input').value.replace(/[^0-9.]/g,'')) || 0;
+  const amountVal = Number(document.getElementById('amount-input').value) || 0;
+  if (!amountVal || (type==='limit' && !priceVal)) { alert('Masukkan amount dan price (untuk limit)'); return; }
+  // basic balance check
+  if (side==='buy') {
+    const cost = (type==='market') ? (state.asks[0]?.price || state.mid) * amountVal : priceVal * amountVal;
+    if (cost > state.balances.IDR + 1e-6) { alert('Saldo IDR tidak cukup'); return; }
+  } else {
+    if (amountVal > state.balances.BTC + 1e-9) { alert('Saldo BTC tidak cukup'); return; }
+  }
+  placeOrder({user:USER.id, side, type, price: priceVal, amount: amountVal});
+  document.getElementById('price-input').value = '';
+  document.getElementById('amount-input').value = '';
+});
+
+/* Cancel all button */
+document.getElementById('cancel-all-btn').addEventListener('click', ()=>{
+  if (!confirm('Cancel semua order?')) return;
+  cancelAll();
+});
+
+/* Simple background market activity to make demo lively:
+   - Every 1-3s create random tiny trades by consuming book
+   - Occasionally shift mid price slightly
+*/
+function randomMarketActivity() {
+  const r = Math.random();
+  if (r < 0.6) {
+    // small market buy or sell
+    const side = Math.random() > 0.5 ? 'buy' : 'sell';
+    const amt = Number((Math.random()*0.02 + 0.0005).toFixed(6));
+    // create synthetic order and execute as market taker (but not from user)
+    const fakeOrder = {id: 0, user:'mkt', side, type:'market', price:0, amount:amt, filled:0, status:'open', ts:now()};
+    // execute but do not touch user's balances
+    if (side==='buy') {
+      let remaining = amt;
+      while (remaining > 1e-9 && state.asks.length) {
+        const top = state.asks[0];
+        const tradeAmt = Math.min(remaining, top.amount);
+        const tradePrice = top.price;
+        pushTrade({buyOrderId:null, sellOrderId:null, price:tradePrice, amount:tradeAmt, side:'buy', fee:0});
+        top.amount -= tradeAmt; if (top.amount<=1e-9) state.asks.shift();
+        remaining -= tradeAmt;
+      }
+    } else {
+      let remaining = amt;
+      while (remaining > 1e-9 && state.bids.length) {
+        const top = state.bids[0];
+        const tradeAmt = Math.min(remaining, top.amount);
+        const tradePrice = top.price;
+        pushTrade({buyOrderId:null, sellOrderId:null, price:tradePrice, amount:tradeAmt, side:'sell', fee:0});
+        top.amount -= tradeAmt; if (top.amount<=1e-9) state.bids.shift();
+        remaining -= tradeAmt;
+      }
+    }
+  } else {
+    // shift mid small
+    const ch = Math.round(state.mid * (Math.random()*0.002 - 0.001));
+    state.mid = Math.max(100000, state.mid + ch);
+    // regenerate some book liquidity at edges
+    while (state.bids.length < 12) state.bids.push({price: Math.round(state.mid * (1 - Math.random()*0.02)), amount: Number((Math.random()*0.05).toFixed(6))});
+    while (state.asks.length < 12) state.asks.push({price: Math.round(state.mid * (1 + Math.random()*0.02)), amount: Number((Math.random()*0.05).toFixed(6))});
+  }
+  // push snapshot to price series to animate chart
+  state.priceSeries.push({ts: now(), price: state.mid});
+  if (state.priceSeries.length > 500) state.priceSeries.shift();
+  drawPriceChart(); updateOrderbookUI();
+  setTimeout(randomMarketActivity, 800 + Math.random()*1800);
+}
+
+/* init */
+function init() {
+  state.priceSeries = [];
+  for (let i=80;i>0;i--) state.priceSeries.push({ts: now(), price: Math.round(state.mid * (1 + (Math.random()*0.02 - 0.01)))});
+  seedOrderbook(12, 0.0025);
+  // initial priceHistory last value is mid
+  drawPriceChart();
+  // bind chart redraw on resize
+  window.addEventListener('resize', drawPriceChart);
+  // start market activity
+  setTimeout(randomMarketActivity, 1000);
+}
+init();
+
+/* Expose some debug helpers on window for tinkering */
+window.__STATE = state;
+window.placeOrderDebug = (side, type, price, amount) => placeOrder({user: USER.id, side, type, price, amount});
+</script>
+</body>
+</html>
